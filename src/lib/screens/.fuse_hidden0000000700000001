@@ -1,0 +1,312 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/semantics.dart';
+import 'dart:ui' as ui;
+import '../theme/app_theme.dart';
+import 'conversion/conversion_screen.dart';
+import 'decaimiento/decaimiento_screen.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+  int _current = 0;
+  late final PageController _page;
+
+  @override
+  void initState() {
+    super.initState();
+    _page = PageController();
+  }
+
+  @override
+  void dispose() {
+    _page.dispose();
+    super.dispose();
+  }
+
+  void _switch(int index) {
+    if (index == _current) return;
+    HapticFeedback.selectionClick();
+    setState(() => _current = index);
+    _page.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 320),
+      curve: const Cubic(0.16, 1, 0.3, 1),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: Column(
+        children: [
+          _Header(current: _current, onTab: _switch),
+          Expanded(
+            child: PageView(
+              controller: _page,
+              physics: const NeverScrollableScrollPhysics(),
+              // Announce page change to screen readers
+              onPageChanged: (i) {
+                final label = i == 0 ? 'Conversión' : 'Decaimiento';
+                SemanticsService.announce(label);
+              },
+              children: const [ConversionScreen(), DecaimientoScreen()],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Header ───────────────────────────────────────────────────────────────────
+class _Header extends StatelessWidget {
+  final int current;
+  final ValueChanged<int> onTab;
+  const _Header({required this.current, required this.onTab});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      bottom: false,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Logo — purely decorative, excluded from a11y tree
+                ExcludeSemantics(
+                  child: _LogoMark(),
+                ),
+                const SizedBox(width: 10),
+                // App name as heading
+                Semantics(
+                  header: true,
+                  child: const Text(
+                    'Radiux',
+                    style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary, letterSpacing: -0.7),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Status dot — decorative
+                ExcludeSemantics(
+                  child: Container(
+                    width: 5, height: 5,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFF10B981),
+                      boxShadow: [BoxShadow(
+                        color: Color(0x9910B981), blurRadius: 6)],
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                // Version badge — decorative
+                ExcludeSemantics(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryGlow,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppColors.primary.withOpacity(0.28), width: 0.5),
+                    ),
+                    child: const Text('v2.0',
+                      style: TextStyle(
+                        fontSize: 10.5, color: AppColors.primaryLight,
+                        fontWeight: FontWeight.w600, letterSpacing: 0.2)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Tab switcher
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: _TabRow(current: current, onTab: onTab),
+          ),
+          const SizedBox(height: 12),
+
+          ExcludeSemantics(
+            child: Container(height: 0.5, color: AppColors.border),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LogoMark extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 28, height: 28,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.primary,
+        boxShadow: [BoxShadow(
+          color: AppColors.primary.withOpacity(0.5), blurRadius: 10)],
+      ),
+      child: Stack(alignment: Alignment.center, children: [
+        Container(
+          width: 18, height: 18,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+          ),
+        ),
+        Container(
+          width: 6, height: 6,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle, color: Colors.white),
+        ),
+      ]),
+    );
+  }
+}
+
+// ─── Tab row ──────────────────────────────────────────────────────────────────
+class _TabRow extends StatelessWidget {
+  final int current;
+  final ValueChanged<int> onTab;
+  const _TabRow({required this.current, required this.onTab});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 44, // ≥ 44pt Apple HIG minimum
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border, width: 0.5),
+      ),
+      child: Row(children: [
+        _Tab(
+          label: 'Conversión',
+          icon: Icons.swap_horiz_rounded,
+          selected: current == 0,
+          onTap: () => onTab(0),
+        ),
+        ExcludeSemantics(
+          child: Container(width: 0.5, color: AppColors.border),
+        ),
+        _Tab(
+          label: 'Decaimiento',
+          icon: Icons.science_outlined,
+          selected: current == 1,
+          onTap: () => onTab(1),
+        ),
+      ]),
+    );
+  }
+}
+
+class _Tab extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+  const _Tab({
+    required this.label, required this.icon,
+    required this.selected, required this.onTap,
+  });
+  @override
+  State<_Tab> createState() => _TabState();
+}
+
+class _TabState extends State<_Tab> with SingleTickerProviderStateMixin {
+  late final AnimationController _press;
+
+  @override
+  void initState() {
+    super.initState();
+    _press = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 80),
+      reverseDuration: const Duration(milliseconds: 200),
+    );
+  }
+
+  @override
+  void dispose() { _press.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Semantics(
+        label: widget.label,
+        selected: widget.selected,
+        button: true,
+        // Hint read by VoiceOver when not selected
+        hint: widget.selected ? null : 'Ir a ${widget.label}',
+        child: GestureDetector(
+          onTapDown: (_) => _press.forward(),
+          onTapUp: (_) { _press.reverse(); widget.onTap(); },
+          onTapCancel: () => _press.reverse(),
+          // Full-height hit area — no accidental misses
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedBuilder(
+            animation: _press,
+            builder: (_, child) => Transform.scale(
+              scale: 1.0 - 0.04 * _press.value,
+              child: child,
+            ),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              margin: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: widget.selected
+                    ? AppColors.primary.withOpacity(0.14)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: widget.selected
+                    ? Border.all(
+                        color: AppColors.primary.withOpacity(0.32), width: 0.5)
+                    : null,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ExcludeSemantics(
+                    child: Icon(
+                      widget.icon,
+                      size: 14,
+                      color: widget.selected
+                          ? AppColors.primaryLight
+                          : AppColors.textDisabled,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 200),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: widget.selected
+                          ? FontWeight.w600 : FontWeight.w400,
+                      color: widget.selected
+                          ? AppColors.primaryLight
+                          : AppColors.textDisabled,
+                      letterSpacing: -0.1,
+                    ),
+                    child: Text(widget.label),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

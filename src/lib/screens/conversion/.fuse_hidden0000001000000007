@@ -1,0 +1,842 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/semantics.dart';
+import '../../models/unit.dart';
+import '../../models/decay_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/glass_card.dart';
+
+class ConversionScreen extends StatefulWidget {
+  const ConversionScreen({super.key});
+  @override
+  State<ConversionScreen> createState() => _ConversionScreenState();
+}
+
+class _ConversionScreenState extends State<ConversionScreen>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  final _inputCtrl = TextEditingController();
+  final _focus     = FocusNode();
+  final _scrollCtrl = ScrollController();
+
+  RadioUnit _from = kUnits.first;
+  RadioUnit _to   = kUnits[4];
+  double?   _result;
+  String?   _error;
+  bool      _converted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _inputCtrl.addListener(() =>
+        setState(() { _error = null; _result = null; _converted = false; }));
+  }
+
+  @override
+  void dispose() {
+    _inputCtrl.dispose();
+    _focus.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _convert() {
+    final v = double.tryParse(_inputCtrl.text.replaceAll(',', '.'));
+    if (v == null || v <= 0) {
+      setState(() => _error = 'Ingresá un número positivo');
+      HapticFeedback.mediumImpact();
+      return;
+    }
+    setState(() {
+      _result    = DecayService.convert(v, _from, _to);
+      _error     = null;
+      _converted = true;
+    });
+    HapticFeedback.lightImpact();
+    _focus.unfocus();
+    // Announce result to screen readers
+    final formatted = '${DecayService.formatActivity(_result!)} ${_to.label}';
+    SemanticsService.announce(
+        'Resultado: $formatted');
+    // Scroll down so result is visible
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.animateTo(
+          _scrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  void _swap() {
+    HapticFeedback.selectionClick();
+    setState(() {
+      final tmp = _from; _from = _to; _to = tmp;
+      _result = null; _converted = false;
+    });
+    SemanticsService.announce(
+        'Intercambiado: de ${_from.label} a ${_to.label}');
+  }
+
+  void _reset() {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _inputCtrl.clear();
+      _result = null; _error = null; _converted = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return GestureDetector(
+      onTap: () => _focus.unfocus(),
+      child: SingleChildScrollView(
+        controller: _scrollCtrl,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            // ── Heading ─────────────────────────────────────────────
+            _SectionHeading(
+              label: 'Conversión',
+              sub: 'Unidades de actividad radiactiva',
+              hasResult: _converted,
+              onReset: _reset,
+            ),
+            const SizedBox(height: 24),
+
+            // ── Input ───────────────────────────────────────────────
+            _BigInput(
+              controller: _inputCtrl,
+              focus: _focus,
+              unit: _from,
+              hasError: _error != null,
+              onUnitTap: () => _showPicker(isFrom: true),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 6),
+              _ErrorRow(text: _error!),
+            ],
+            const SizedBox(height: 16),
+
+            // ── From / Swap / To ────────────────────────────────────
+            Row(children: [
+              Expanded(child: _UnitBox(
+                label: 'Desde', unit: _from,
+                color: AppColors.primary,
+                onTap: () => _showPicker(isFrom: true),
+              )),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: _SwapBtn(onTap: _swap),
+              ),
+              Expanded(child: _UnitBox(
+                label: 'Hacia', unit: _to,
+                color: AppColors.accent,
+                onTap: () => _showPicker(isFrom: false),
+              )),
+            ]),
+            const SizedBox(height: 20),
+
+            // ── Unit grid ───────────────────────────────────────────
+            _UnitGrid(
+              from: _from, to: _to,
+              onSelect: (u, isFrom) {
+                HapticFeedback.selectionClick();
+                setState(() {
+                  if (isFrom) _from = u; else _to = u;
+                  _result = null; _converted = false;
+                });
+              },
+            ),
+            const SizedBox(height: 24),
+
+            // ── Convert button ──────────────────────────────────────
+            _PrimaryBtn(
+              label: 'Convertir',
+              icon: Icons.swap_horiz_rounded,
+              enabled: _inputCtrl.text.isNotEmpty,
+              onTap: _convert,
+            ),
+
+            // ── Result ──────────────────────────────────────────────
+            if (_converted && _result != null) ...[
+              const SizedBox(height: 20),
+              TweenAnimationBuilder<double>(
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeOutCubic,
+                tween: Tween(begin: 0.0, end: 1.0),
+                builder: (_, v, child) => Opacity(
+                  opacity: v,
+                  child: Transform.translate(
+                    offset: Offset(0, (1 - v) * 16),
+                    child: Transform.scale(scale: 0.96 + 0.04 * v, child: child),
+                  ),
+                ),
+                child: _ResultHero(
+                  input: double.parse(_inputCtrl.text.replaceAll(',', '.')),
+                  result: _result!,
+                  from: _from, to: _to,
+                  onCopy: _copyResult,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _copyResult() {
+    final text = '${DecayService.formatActivity(_result!)} ${_to.label}';
+    Clipboard.setData(ClipboardData(text: text));
+    _snack(context, text);
+    HapticFeedback.selectionClick();
+  }
+
+  void _showPicker({required bool isFrom}) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _UnitSheet(
+        selected: isFrom ? _from : _to,
+        onPick: (u) {
+          HapticFeedback.selectionClick();
+          setState(() {
+            if (isFrom) _from = u; else _to = u;
+            _result = null; _converted = false;
+          });
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+}
+
+// ─── Section heading ──────────────────────────────────────────────────────────
+class _SectionHeading extends StatelessWidget {
+  final String label, sub;
+  final bool hasResult;
+  final VoidCallback onReset;
+  const _SectionHeading({
+    required this.label, required this.sub,
+    required this.hasResult, required this.onReset,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Semantics(
+            header: true,
+            child: Text(label, style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 26, fontWeight: FontWeight.w800,
+              letterSpacing: -0.6, height: 1.1)),
+          ),
+          const SizedBox(height: 4),
+          Text(sub, style: const TextStyle(
+            color: AppColors.textSecondary, fontSize: 12, height: 1.4)),
+        ]),
+      ),
+      if (hasResult)
+        Semantics(
+          label: 'Limpiar resultado',
+          button: true,
+          child: GestureDetector(
+            onTap: onReset,
+            child: Container(
+              // ≥ 44×44 touch target
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Text('Limpiar', style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12, fontWeight: FontWeight.w500)),
+            ),
+          ),
+        ),
+    ]);
+  }
+}
+
+// ─── Big input ────────────────────────────────────────────────────────────────
+class _BigInput extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focus;
+  final RadioUnit unit;
+  final bool hasError;
+  final VoidCallback onUnitTap;
+  const _BigInput({
+    required this.controller, required this.focus,
+    required this.unit, required this.hasError,
+    required this.onUnitTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Actividad inicial',
+      textField: true,
+      child: ListenableBuilder(
+        listenable: focus,
+        builder: (_, __) {
+          final focused = focus.hasFocus;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: hasError ? AppColors.error
+                    : focused ? AppColors.primary
+                    : AppColors.border,
+                width: focused || hasError ? 1.5 : 1.0,
+              ),
+              color: AppColors.card,
+              boxShadow: focused && !hasError
+                  ? [BoxShadow(color: AppColors.primaryGlow, blurRadius: 16, spreadRadius: 2)]
+                  : hasError
+                      ? [BoxShadow(color: AppColors.errorGlow, blurRadius: 12)]
+                      : null,
+            ),
+            child: Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  focusNode: focus,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+                  textInputAction: TextInputAction.done,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary, fontSize: 34,
+                    fontWeight: FontWeight.w700, letterSpacing: -1.0),
+                  decoration: const InputDecoration(
+                    hintText: '0',
+                    hintStyle: TextStyle(
+                      color: AppColors.textDisabled, fontSize: 34,
+                      fontWeight: FontWeight.w700),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    filled: false,
+                  ),
+                ),
+              ),
+              // Unit selector — min 44pt touch target
+              Semantics(
+                label: 'Unidad: ${unit.label}. Toca para cambiar',
+                button: true,
+                child: GestureDetector(
+                  onTap: onUnitTap,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 64, minHeight: 44),
+                    margin: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryGlow,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: AppColors.primary.withOpacity(0.35)),
+                    ),
+                    alignment: Alignment.center,
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text(unit.label, style: const TextStyle(
+                        color: AppColors.primaryLight,
+                        fontSize: 14, fontWeight: FontWeight.w700)),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.expand_more_rounded,
+                          color: AppColors.primaryLight, size: 16),
+                    ]),
+                  ),
+                ),
+              ),
+            ]),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─── Error row ────────────────────────────────────────────────────────────────
+class _ErrorRow extends StatelessWidget {
+  final String text;
+  const _ErrorRow({required this.text});
+  @override
+  Widget build(BuildContext context) => Semantics(
+    liveRegion: true,
+    child: Row(children: [
+      ExcludeSemantics(
+        child: const Icon(Icons.warning_amber_rounded,
+            size: 13, color: AppColors.error),
+      ),
+      const SizedBox(width: 6),
+      Expanded(child: Text(text, style: const TextStyle(
+        color: AppColors.error, fontSize: 11))),
+    ]),
+  );
+}
+
+// ─── Unit box ─────────────────────────────────────────────────────────────────
+class _UnitBox extends StatelessWidget {
+  final String label;
+  final RadioUnit unit;
+  final Color color;
+  final VoidCallback onTap;
+  const _UnitBox({
+    required this.label, required this.unit,
+    required this.color, required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$label: ${unit.label} — ${unit.fullName}. Toca para cambiar',
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withOpacity(0.2)),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: TextStyle(
+              color: color.withOpacity(0.7),
+              fontSize: 10, fontWeight: FontWeight.w600,
+              letterSpacing: 0.6)),
+            const SizedBox(height: 4),
+            Text(unit.label, style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 18, fontWeight: FontWeight.w700)),
+            Text(unit.fullName, style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 10), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Swap button ──────────────────────────────────────────────────────────────
+class _SwapBtn extends StatefulWidget {
+  final VoidCallback onTap;
+  const _SwapBtn({required this.onTap});
+  @override
+  State<_SwapBtn> createState() => _SwapBtnState();
+}
+
+class _SwapBtnState extends State<_SwapBtn>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _rot;
+
+  @override
+  void initState() {
+    super.initState();
+    _rot = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 300));
+  }
+  @override
+  void dispose() { _rot.dispose(); super.dispose(); }
+
+  void _tap() {
+    _rot.forward(from: 0);
+    widget.onTap();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Intercambiar unidades',
+      button: true,
+      child: GestureDetector(
+        onTap: _tap,
+        child: Container(
+          width: 44, height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.card,
+            border: Border.all(color: AppColors.border),
+          ),
+          alignment: Alignment.center,
+          child: AnimatedBuilder(
+            animation: _rot,
+            builder: (_, child) => Transform.rotate(
+              angle: _rot.value * 3.14159,
+              child: child,
+            ),
+            child: ExcludeSemantics(
+              child: const Icon(Icons.swap_horiz_rounded,
+                  color: AppColors.textSecondary, size: 18),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Unit grid ────────────────────────────────────────────────────────────────
+class _UnitGrid extends StatelessWidget {
+  final RadioUnit from, to;
+  final void Function(RadioUnit, bool) onSelect;
+  const _UnitGrid({required this.from, required this.to, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Wrap(
+        spacing: 8, runSpacing: 8,
+        children: kUnits.map((u) {
+          final isFrom = u.id == from.id;
+          final isTo   = u.id == to.id;
+          Color chipColor = AppColors.textDisabled;
+          Color chipBg    = Colors.transparent;
+          Color chipBorder= AppColors.border;
+          if (isFrom) {
+            chipColor  = AppColors.primaryLight;
+            chipBg     = AppColors.primaryGlow;
+            chipBorder = AppColors.primary;
+          } else if (isTo) {
+            chipColor  = AppColors.accentLight;
+            chipBg     = AppColors.accentGlow;
+            chipBorder = AppColors.accent;
+          }
+          return Semantics(
+            label: '${u.label} — ${u.fullName}'
+                '${isFrom ? '. Unidad origen seleccionada' : ''}'
+                '${isTo   ? '. Unidad destino seleccionada' : ''}',
+            button: true,
+            selected: isFrom || isTo,
+            child: GestureDetector(
+              onTap: () => _handleChipTap(u, isFrom, isTo),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                constraints: const BoxConstraints(minHeight: 44),
+                decoration: BoxDecoration(
+                  color: chipBg,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: chipBorder, width: isFrom || isTo ? 1.5 : 1),
+                ),
+                child: Text(u.label, style: TextStyle(
+                  color: chipColor, fontSize: 13,
+                  fontWeight: isFrom || isTo
+                      ? FontWeight.w700 : FontWeight.w500)),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  void _handleChipTap(RadioUnit u, bool isFrom, bool isTo) {
+    HapticFeedback.selectionClick();
+    if (!isFrom && !isTo) {
+      onSelect(u, true); // assign to "from" by default
+    } else if (isFrom) {
+      onSelect(u, false);
+    } else {
+      onSelect(u, true);
+    }
+  }
+}
+
+// ─── Primary button ───────────────────────────────────────────────────────────
+class _PrimaryBtn extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _PrimaryBtn({
+    required this.label, required this.icon,
+    required this.enabled, required this.onTap,
+  });
+  @override
+  State<_PrimaryBtn> createState() => _PrimaryBtnState();
+}
+
+class _PrimaryBtnState extends State<_PrimaryBtn>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _press;
+  @override
+  void initState() {
+    super.initState();
+    _press = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 80),
+      reverseDuration: const Duration(milliseconds: 200),
+    );
+  }
+  @override
+  void dispose() { _press.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: widget.label,
+      button: true,
+      enabled: widget.enabled,
+      child: GestureDetector(
+        onTapDown: widget.enabled ? (_) => _press.forward() : null,
+        onTapUp: widget.enabled ? (_) { _press.reverse(); widget.onTap(); } : null,
+        onTapCancel: () => _press.reverse(),
+        child: AnimatedBuilder(
+          animation: _press,
+          builder: (_, child) => Transform.scale(
+            scale: 1.0 - 0.03 * _press.value, child: child),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: widget.enabled ? AppColors.primary : AppColors.card,
+              boxShadow: widget.enabled ? [
+                BoxShadow(
+                  color: AppColors.primary.withOpacity(0.40),
+                  blurRadius: 20, offset: const Offset(0, 6)),
+                BoxShadow(
+                  color: AppColors.primary.withOpacity(0.18),
+                  blurRadius: 40, offset: const Offset(0, 12)),
+              ] : null,
+            ),
+            alignment: Alignment.center,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              ExcludeSemantics(child: Icon(widget.icon, size: 18,
+                  color: widget.enabled ? Colors.white : AppColors.textDisabled)),
+              const SizedBox(width: 8),
+              Text(widget.label, style: TextStyle(
+                color: widget.enabled ? Colors.white : AppColors.textDisabled,
+                fontSize: 15, fontWeight: FontWeight.w700,
+                letterSpacing: -0.2)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Result hero ──────────────────────────────────────────────────────────────
+class _ResultHero extends StatelessWidget {
+  final double input, result;
+  final RadioUnit from, to;
+  final VoidCallback onCopy;
+  const _ResultHero({
+    required this.input, required this.result,
+    required this.from, required this.to,
+    required this.onCopy,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final formatted = DecayService.formatActivity(result);
+    return GlassCard(
+      hasBorderGlow: true,
+      glowColor: AppColors.primary,
+      isActive: true,
+      padding: const EdgeInsets.all(20),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Header row
+        Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Resultado', style: TextStyle(
+                color: AppColors.primaryLight, fontSize: 11,
+                fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+              Text('${from.label} → ${to.label}', style: const TextStyle(
+                color: AppColors.textSecondary, fontSize: 12)),
+            ]),
+          ),
+          Semantics(
+            label: 'Copiar resultado $formatted ${to.label}',
+            button: true,
+            child: GestureDetector(
+              onTap: onCopy,
+              child: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
+                ),
+                alignment: Alignment.center,
+                child: ExcludeSemantics(
+                  child: const Icon(Icons.copy_rounded,
+                      size: 15, color: AppColors.textSecondary),
+                ),
+              ),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 16),
+
+        // Big number
+        Semantics(
+          label: 'Resultado: $formatted ${to.label}',
+          child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Expanded(
+              child: Text(formatted, style: const TextStyle(
+                color: AppColors.textPrimary, fontSize: 44,
+                fontWeight: FontWeight.w800, letterSpacing: -1.5,
+                fontFeatures: [FontFeature.tabularFigures()])),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(to.label, style: const TextStyle(
+                color: AppColors.primaryLight, fontSize: 22,
+                fontWeight: FontWeight.w700)),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 12),
+        ExcludeSemantics(child: Container(height: 0.5, color: AppColors.border)),
+        const SizedBox(height: 12),
+
+        // Detail row
+        Row(children: [
+          Expanded(child: _InfoChip(
+            label: 'Entrada',
+            value: '${DecayService.formatActivity(input)} ${from.label}',
+            color: AppColors.primary,
+          )),
+          const SizedBox(width: 8),
+          Expanded(child: _InfoChip(
+            label: 'Salida',
+            value: '$formatted ${to.label}',
+            color: AppColors.accent,
+          )),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final String label, value;
+  final Color color;
+  const _InfoChip({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$label: $value',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: const TextStyle(
+            color: AppColors.textSecondary, fontSize: 10)),
+          const SizedBox(height: 2),
+          Text(value, style: TextStyle(
+            color: color, fontSize: 12, fontWeight: FontWeight.w700),
+            maxLines: 1, overflow: TextOverflow.ellipsis),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─── Unit sheet ───────────────────────────────────────────────────────────────
+class _UnitSheet extends StatelessWidget {
+  final RadioUnit selected;
+  final ValueChanged<RadioUnit> onPick;
+  const _UnitSheet({required this.selected, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      child: Column(mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Center(child: ExcludeSemantics(
+          child: Container(width: 36, height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.border,
+              borderRadius: BorderRadius.circular(2))),
+        )),
+        const SizedBox(height: 16),
+        const Text('Unidad de actividad', style: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 16, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        ...kUnits.map((u) {
+          final sel = u.id == selected.id;
+          return Semantics(
+            label: '${u.label} — ${u.fullName}',
+            selected: sel,
+            button: true,
+            child: ListTile(
+              dense: true,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              tileColor: sel ? AppColors.primaryGlow : Colors.transparent,
+              title: Text('${u.label} — ${u.fullName}', style: TextStyle(
+                color: sel ? AppColors.primaryLight : AppColors.textPrimary)),
+              trailing: sel
+                  ? ExcludeSemantics(child: const Icon(
+                      Icons.check_circle_rounded,
+                      color: AppColors.primary, size: 18))
+                  : null,
+              onTap: () => onPick(u),
+            ),
+          );
+        }),
+      ]),
+    );
+  }
+}
+
+// ─── Snackbar helper ──────────────────────────────────────────────────────────
+void _snack(BuildContext context, String text) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    content: Row(children: [
+      ExcludeSemantics(child: const Icon(
+          Icons.check_circle_rounded, color: AppColors.success, size: 18)),
+      const SizedBox(width: 8),
+      Text('$text copiado',
+          style: const TextStyle(color: AppColors.textPrimary)),
+    ]),
+    backgroundColor: AppColors.card,
+    behavior: SnackBarBehavior.floating,
+    margin: const EdgeInsets.all(16),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(10),
+      side: const BorderSide(color: AppColors.border)),
+    duration: const Duration(seconds: 2),
+  ));
+}

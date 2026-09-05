@@ -1,0 +1,1161 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/semantics.dart';
+import 'package:intl/intl.dart';
+import 'dart:math' as math;
+import '../../models/isotope.dart';
+import '../../models/unit.dart';
+import '../../models/decay_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/glass_card.dart';
+
+class DecaimientoScreen extends StatefulWidget {
+  const DecaimientoScreen({super.key});
+  @override
+  State<DecaimientoScreen> createState() => _DecaimientoScreenState();
+}
+
+class _DecaimientoScreenState extends State<DecaimientoScreen>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  final _ctrl       = TextEditingController();
+  final _focus      = FocusNode();
+  final _scroll     = ScrollController();
+
+  RadioUnit _unit       = kUnits[4];
+  Isotope   _isotope    = kIsotopes.first;
+  DateTime  _refDate    = DateTime.now();
+  double    _addedHours = 0;
+  int?      _quickIdx;
+  double?   _result;
+  String?   _error;
+  bool      _busy       = false;
+
+  DateTime get _targetDate =>
+      _refDate.add(Duration(minutes: (_addedHours * 60).round()));
+  double?  get _a0 =>
+      double.tryParse(_ctrl.text.replaceAll(',', '.'));
+  bool get _canCalc =>
+      _ctrl.text.isNotEmpty && (_a0 ?? 0) > 0 && _addedHours > 0;
+
+  List<_QOpt> get _opts => [
+    _QOpt('+1h',  1),
+    _QOpt('+6h',  6),
+    _QOpt('+12h', 12),
+    _QOpt('+24h', 24),
+    _QOpt('+T½',  _isotope.halfLifeHours, isHL: true),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl.addListener(() =>
+        setState(() { _error = null; _result = null; }));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose(); _focus.dispose(); _scroll.dispose();
+    super.dispose();
+  }
+
+  void _pickQuick(int i) {
+    HapticFeedback.selectionClick();
+    final newIdx = _quickIdx == i ? null : i;
+    setState(() {
+      _quickIdx    = newIdx;
+      _addedHours  = newIdx == null ? 0 : _opts[i].hours;
+      _result      = null;
+    });
+    if (newIdx != null) {
+      final pct = (math.pow(2, -_opts[i].hours / _isotope.halfLifeHours) * 100)
+          .toStringAsFixed(1);
+      SemanticsService.announce(
+          '${_opts[i].label} seleccionado. $pct% de actividad estimada');
+    }
+  }
+
+  Future<void> _pickDate() async {
+    final d = await showDatePicker(
+      context: context,
+      initialDate: _refDate,
+      firstDate: DateTime(2000), lastDate: DateTime(2100),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: AppColors.primary, surface: AppColors.card,
+            onSurface: AppColors.textPrimary),
+          dialogTheme: const DialogThemeData(backgroundColor: AppColors.surface),
+        ),
+        child: child!,
+      ),
+    );
+    if (d == null || !mounted) return;
+    final t = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_refDate),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: AppColors.primary, surface: AppColors.card,
+            onSurface: AppColors.textPrimary),
+          timePickerTheme:
+              const TimePickerThemeData(backgroundColor: AppColors.surface),
+        ),
+        child: child!,
+      ),
+    );
+    final time = t ?? TimeOfDay.fromDateTime(_refDate);
+    if (!mounted) return;
+    setState(() {
+      _refDate = DateTime(d.year, d.month, d.day, time.hour, time.minute);
+      _result  = null;
+    });
+    HapticFeedback.lightImpact();
+  }
+
+  Future<void> _calculate() async {
+    if (!_canCalc) {
+      final msg = (_a0 == null || _a0! <= 0)
+          ? 'Ingresá un valor de actividad positivo'
+          : 'Seleccioná un tiempo transcurrido';
+      setState(() => _error = msg);
+      HapticFeedback.mediumImpact();
+      return;
+    }
+    setState(() { _busy = true; _error = null; });
+    await Future.delayed(const Duration(milliseconds: 360));
+    final r = DecayService.decay(
+      initialActivity: _a0!,
+      halfLifeHours: _isotope.halfLifeHours,
+      elapsedHours: _addedHours,
+    );
+    if (!mounted) return;
+    setState(() { _result = r; _busy = false; });
+    HapticFeedback.lightImpact();
+    // Announce result
+    final formatted = '${DecayService.formatActivity(r)} ${_unit.label}';
+    SemanticsService.announce(
+        'Actividad residual: $formatted', 
+    // Scroll to result
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) {
+        _scroll.animateTo(
+          _scroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  void _reset() {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _ctrl.clear(); _addedHours = 0; _quickIdx = null;
+      _result = null; _error = null; _refDate = DateTime.now();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return GestureDetector(
+      onTap: () => _focus.unfocus(),
+      child: Stack(children: [
+        SingleChildScrollView(
+          controller: _scroll,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 140),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+
+              // ── Heading ──────────────────────────────────────────
+              _SectionHeading(
+                hasResult: _result != null,
+                onReset: _reset,
+              ),
+              const SizedBox(height: 28),
+
+              // ── Activity input ───────────────────────────────────
+              const _Label('Actividad inicial'),
+              const SizedBox(height: 8),
+              _BigInput(
+                controller: _ctrl, focusNode: _focus,
+                unit: _unit, hasError: _error != null,
+                onUnitTap: _showUnitSheet,
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 6),
+                _ErrorRow(text: _error!),
+              ],
+              const SizedBox(height: 22),
+
+              // ── Isotope ──────────────────────────────────────────
+              const _Label('Isótopo'),
+              const SizedBox(height: 8),
+              _IsotopeCard(isotope: _isotope, onTap: _showIsotopeSheet),
+              const SizedBox(height: 22),
+
+              // ── Reference date ───────────────────────────────────
+              Row(children: [
+                const Expanded(child: _Label('Fecha y hora de referencia')),
+                _EditDateBtn(onTap: _pickDate),
+              ]),
+              const SizedBox(height: 8),
+              _DateChip(dateTime: _refDate),
+              const SizedBox(height: 22),
+
+              // ── Quick time ───────────────────────────────────────
+              const _Label('Tiempo transcurrido'),
+              const SizedBox(height: 10),
+              _QuickRow(opts: _opts, selected: _quickIdx, onPick: _pickQuick),
+
+              if (_quickIdx != null) ...[
+                const SizedBox(height: 10),
+                TweenAnimationBuilder<double>(
+                  key: ValueKey(_quickIdx),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOut,
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  builder: (_, v, child) => Opacity(
+                    opacity: v,
+                    child: Transform.translate(
+                        offset: Offset(0, (1 - v) * 10), child: child),
+                  ),
+                  child: _TargetCard(
+                    target: _targetDate,
+                    hours: _addedHours,
+                    isotope: _isotope,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 28),
+
+              // ── Result ───────────────────────────────────────────
+              if (_result != null && _a0 != null)
+                TweenAnimationBuilder<double>(
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeOutCubic,
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  builder: (_, v, child) => Opacity(
+                    opacity: v,
+                    child: Transform.translate(
+                      offset: Offset(0, (1 - v) * 18),
+                      child: Transform.scale(
+                          scale: 0.96 + 0.04 * v, child: child),
+                    ),
+                  ),
+                  child: _ResultHero(
+                    a0: _a0!, result: _result!,
+                    unit: _unit, isotope: _isotope, hours: _addedHours,
+                    onCopy: _copyResult,
+                    onReset: _reset,
+                  ),
+                ),
+            ],
+          ),
+        ),
+
+        // ── Pinned footer ────────────────────────────────────────────
+        Positioned(
+          left: 0, right: 0, bottom: 0,
+          child: _CalcFooter(
+            canCalc: _canCalc, busy: _busy, onTap: _calculate),
+        ),
+      ]),
+    );
+  }
+
+  void _copyResult() {
+    final text = '${DecayService.formatActivity(_result!)} ${_unit.label}';
+    Clipboard.setData(ClipboardData(text: text));
+    _snack(context, text);
+    HapticFeedback.selectionClick();
+  }
+
+  void _showUnitSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _UnitSheet(
+        selected: _unit,
+        onPick: (u) {
+          setState(() { _unit = u; _result = null; });
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
+  void _showIsotopeSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.6, minChildSize: 0.4, maxChildSize: 0.9,
+        expand: false,
+        builder: (_, sc) => _IsotopeSheet(
+          selected: _isotope, scroll: sc,
+          onPick: (iso) {
+            HapticFeedback.selectionClick();
+            setState(() {
+              _isotope = iso; _quickIdx = null;
+              _addedHours = 0; _result = null;
+            });
+            Navigator.pop(context);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Section heading ──────────────────────────────────────────────────────────
+class _SectionHeading extends StatelessWidget {
+  final bool hasResult;
+  final VoidCallback onReset;
+  const _SectionHeading({required this.hasResult, required this.onReset});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Semantics(
+            header: true,
+            child: const Text('Decaimiento', style: TextStyle(
+              color: AppColors.textPrimary, fontSize: 26,
+              fontWeight: FontWeight.w800, letterSpacing: -0.6, height: 1.1)),
+          ),
+          const SizedBox(height: 4),
+          const Text('Actividad residual por isótopo y tiempo', style: TextStyle(
+            color: AppColors.textSecondary, fontSize: 12, height: 1.4)),
+        ]),
+      ),
+      if (hasResult)
+        Semantics(
+          label: 'Limpiar cálculo',
+          button: true,
+          child: GestureDetector(
+            onTap: onReset,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Text('Limpiar', style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12, fontWeight: FontWeight.w500)),
+            ),
+          ),
+        ),
+    ]);
+  }
+}
+
+// ─── Label ────────────────────────────────────────────────────────────────────
+class _Label extends StatelessWidget {
+  final String text;
+  const _Label(this.text);
+  @override
+  Widget build(BuildContext context) => Text(text, style: const TextStyle(
+    color: AppColors.textSecondary, fontSize: 11,
+    fontWeight: FontWeight.w600, letterSpacing: 0.5));
+}
+
+// ─── Big input ────────────────────────────────────────────────────────────────
+class _BigInput extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final RadioUnit unit;
+  final bool hasError;
+  final VoidCallback onUnitTap;
+  const _BigInput({
+    required this.controller, required this.focusNode,
+    required this.unit, required this.hasError, required this.onUnitTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Actividad inicial en ${unit.label}',
+      textField: true,
+      child: ListenableBuilder(
+        listenable: focusNode,
+        builder: (_, __) {
+          final focused = focusNode.hasFocus;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: hasError ? AppColors.error
+                    : focused ? AppColors.primary
+                    : AppColors.border,
+                width: focused || hasError ? 1.5 : 1.0,
+              ),
+              color: AppColors.card,
+              boxShadow: focused && !hasError
+                  ? [BoxShadow(color: AppColors.primaryGlow,
+                      blurRadius: 16, spreadRadius: 2)]
+                  : hasError
+                      ? [BoxShadow(color: AppColors.errorGlow, blurRadius: 12)]
+                      : null,
+            ),
+            child: Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+                  textInputAction: TextInputAction.done,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary, fontSize: 34,
+                    fontWeight: FontWeight.w700, letterSpacing: -1.0),
+                  decoration: const InputDecoration(
+                    hintText: '0',
+                    hintStyle: TextStyle(
+                      color: AppColors.textDisabled, fontSize: 34,
+                      fontWeight: FontWeight.w700),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    filled: false,
+                  ),
+                ),
+              ),
+              Semantics(
+                label: 'Unidad: ${unit.label}. Toca para cambiar',
+                button: true,
+                child: GestureDetector(
+                  onTap: onUnitTap,
+                  child: Container(
+                    constraints:
+                        const BoxConstraints(minWidth: 64, minHeight: 44),
+                    margin: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryGlow,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: AppColors.primary.withOpacity(0.35)),
+                    ),
+                    alignment: Alignment.center,
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text(unit.label, style: const TextStyle(
+                        color: AppColors.primaryLight,
+                        fontSize: 14, fontWeight: FontWeight.w700)),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.expand_more_rounded,
+                          color: AppColors.primaryLight, size: 16),
+                    ]),
+                  ),
+                ),
+              ),
+            ]),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─── Error row ────────────────────────────────────────────────────────────────
+class _ErrorRow extends StatelessWidget {
+  final String text;
+  const _ErrorRow({required this.text});
+  @override
+  Widget build(BuildContext context) => Semantics(
+    liveRegion: true,
+    child: Row(children: [
+      ExcludeSemantics(child: const Icon(
+          Icons.warning_amber_rounded, size: 13, color: AppColors.error)),
+      const SizedBox(width: 6),
+      Expanded(child: Text(text, style: const TextStyle(
+        color: AppColors.error, fontSize: 11))),
+    ]),
+  );
+}
+
+// ─── Isotope card ─────────────────────────────────────────────────────────────
+class _IsotopeCard extends StatelessWidget {
+  final Isotope isotope;
+  final VoidCallback onTap;
+  const _IsotopeCard({required this.isotope, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Isótopo: ${isotope.name}. Vida media: ${isotope.halfLifeDisplay}.'
+          ' Toca para cambiar',
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(children: [
+            ExcludeSemantics(child: _IsoPill(isotope: isotope, size: 52)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(isotope.name, style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 15, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(isotope.halfLifeDisplay, style: const TextStyle(
+                  color: AppColors.textSecondary, fontSize: 12)),
+                const SizedBox(height: 2),
+                Text(isotope.category, style: TextStyle(
+                  color: isotope.color.withOpacity(0.85),
+                  fontSize: 11, fontWeight: FontWeight.w500)),
+              ]),
+            ),
+            ExcludeSemantics(child: const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textDisabled, size: 20)),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Isotope pill ─────────────────────────────────────────────────────────────
+class _IsoPill extends StatelessWidget {
+  final Isotope isotope;
+  final double size;
+  const _IsoPill({required this.isotope, this.size = 44});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size, height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        color: isotope.color.withOpacity(0.12),
+        border: Border.all(color: isotope.color.withOpacity(0.3)),
+      ),
+      alignment: Alignment.center,
+      child: Text(isotope.symbol, textAlign: TextAlign.center,
+        style: TextStyle(color: isotope.color, fontSize: size * 0.2,
+          fontWeight: FontWeight.w800, height: 1.15)),
+    );
+  }
+}
+
+// ─── Date chip ────────────────────────────────────────────────────────────────
+class _DateChip extends StatelessWidget {
+  final DateTime dateTime;
+  const _DateChip({required this.dateTime});
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = DateFormat("EEE, d MMM y • HH:mm", 'es_AR');
+    return Semantics(
+      label: 'Fecha de referencia: ${fmt.format(dateTime)}',
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Text(fmt.format(dateTime), style: const TextStyle(
+          color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w500,
+          fontFeatures: [FontFeature.tabularFigures()]),
+          textAlign: TextAlign.center),
+      ),
+    );
+  }
+}
+
+// ─── Edit date btn ────────────────────────────────────────────────────────────
+class _EditDateBtn extends StatelessWidget {
+  final VoidCallback onTap;
+  const _EditDateBtn({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Modificar fecha y hora de referencia',
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          constraints: const BoxConstraints(minHeight: 44),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(children: [
+            ExcludeSemantics(child: const Icon(
+                Icons.edit_calendar_rounded, size: 13,
+                color: AppColors.primary)),
+            const SizedBox(width: 5),
+            const Text('Modificar', style: TextStyle(
+              color: AppColors.primary,
+              fontSize: 11, fontWeight: FontWeight.w600)),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Quick time row ───────────────────────────────────────────────────────────
+class _QuickRow extends StatelessWidget {
+  final List<_QOpt> opts;
+  final int? selected;
+  final ValueChanged<int> onPick;
+  const _QuickRow({required this.opts, required this.selected, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: opts.asMap().entries.map((e) {
+        final i = e.key; final o = e.value;
+        final sel = selected == i;
+        return Expanded(
+          child: Semantics(
+            label: o.isHL
+                ? 'Una vida media: ${o.hours.toStringAsFixed(1)} horas'
+                : o.label,
+            selected: sel,
+            button: true,
+            child: GestureDetector(
+              onTap: () => onPick(i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: EdgeInsets.only(right: i < opts.length - 1 ? 6 : 0),
+                constraints: const BoxConstraints(minHeight: 44),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: sel ? AppColors.primaryGlow : AppColors.card,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: sel ? AppColors.primary : AppColors.border,
+                    width: sel ? 1.5 : 1.0),
+                  boxShadow: sel
+                      ? [BoxShadow(color: AppColors.primaryGlow, blurRadius: 8)]
+                      : null,
+                ),
+                alignment: Alignment.center,
+                child: Text(o.label, style: TextStyle(
+                  color: sel ? AppColors.primaryLight : AppColors.textSecondary,
+                  fontSize: 12,
+                  fontWeight: sel ? FontWeight.w700 : FontWeight.w500)),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ─── Target card ──────────────────────────────────────────────────────────────
+class _TargetCard extends StatelessWidget {
+  final DateTime target;
+  final double hours;
+  final Isotope isotope;
+  const _TargetCard({required this.target, required this.hours, required this.isotope});
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = DateFormat("EEE, d MMM y • HH:mm", 'es_AR');
+    final pct = (math.pow(2, -hours / isotope.halfLifeHours) * 100)
+        .toStringAsFixed(1);
+    return Semantics(
+      label: 'Fecha objetivo: ${fmt.format(target)}. $pct% de actividad estimada',
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.accentGlow,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.accent.withOpacity(0.3)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(fmt.format(target), style: const TextStyle(
+            color: AppColors.accentLight,
+            fontSize: 14, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 3),
+          Row(children: [
+            Text('Fecha objetivo · ', style: TextStyle(
+              color: AppColors.accent.withOpacity(0.7), fontSize: 11)),
+            Text('$pct% de actividad estimada', style: const TextStyle(
+              color: AppColors.accentLight,
+              fontSize: 11, fontWeight: FontWeight.w600)),
+          ]),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─── Result hero ──────────────────────────────────────────────────────────────
+class _ResultHero extends StatelessWidget {
+  final double a0, result, hours;
+  final RadioUnit unit;
+  final Isotope isotope;
+  final VoidCallback onCopy, onReset;
+  const _ResultHero({
+    required this.a0, required this.result, required this.unit,
+    required this.isotope, required this.hours,
+    required this.onCopy, required this.onReset,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fraction  = result / a0;
+    final pct       = (fraction * 100).toStringAsFixed(2);
+    final halfLives = (hours / isotope.halfLifeHours).toStringAsFixed(2);
+    final reduction = (100 - fraction * 100).toStringAsFixed(2);
+    final formatted = DecayService.formatActivity(result);
+
+    return GlassCard(
+      hasBorderGlow: true, glowColor: AppColors.primary, isActive: true,
+      padding: const EdgeInsets.all(20),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+        // Header
+        Row(children: [
+          ExcludeSemantics(child: _IsoPill(isotope: isotope, size: 48)),
+          const SizedBox(width: 12),
+          Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Actividad residual', style: TextStyle(
+              color: AppColors.primaryLight, fontSize: 11,
+              fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+            Text(isotope.name, style: const TextStyle(
+              color: AppColors.textSecondary, fontSize: 12)),
+          ])),
+          Semantics(
+            label: 'Copiar resultado $formatted ${unit.label}',
+            button: true,
+            child: GestureDetector(
+              onTap: onCopy,
+              child: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
+                ),
+                alignment: Alignment.center,
+                child: ExcludeSemantics(child: const Icon(
+                    Icons.copy_rounded, size: 15,
+                    color: AppColors.textSecondary)),
+              ),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 20),
+
+        // Big number
+        Semantics(
+          label: 'Actividad residual: $formatted ${unit.label}',
+          child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Expanded(child: Text(formatted, style: const TextStyle(
+              color: AppColors.textPrimary, fontSize: 44,
+              fontWeight: FontWeight.w800, letterSpacing: -1.5,
+              fontFeatures: [FontFeature.tabularFigures()]))),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(unit.label, style: const TextStyle(
+                color: AppColors.primaryLight,
+                fontSize: 22, fontWeight: FontWeight.w700)),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 16),
+
+        ExcludeSemantics(
+            child: Container(height: 0.5, color: AppColors.border)),
+        const SizedBox(height: 16),
+
+        // Stat chips
+        Row(children: [
+          Expanded(child: _Chip(
+            label: 'Restante', value: '$pct%',
+            color: AppColors.success, glow: AppColors.successGlow)),
+          const SizedBox(width: 8),
+          Expanded(child: _Chip(
+            label: 'Vidas ½', value: halfLives,
+            color: AppColors.accent, glow: AppColors.accentGlow)),
+          const SizedBox(width: 8),
+          Expanded(child: _Chip(
+            label: 'Reducción', value: '$reduction%',
+            color: AppColors.error, glow: AppColors.errorGlow)),
+        ]),
+        const SizedBox(height: 16),
+
+        // Decay bar
+        _DecayBar(fraction: fraction),
+        const SizedBox(height: 16),
+
+        // Reset
+        Semantics(
+          label: 'Nuevo cálculo',
+          button: true,
+          child: GestureDetector(
+            onTap: onReset,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: AppColors.cardHover,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.border),
+              ),
+              alignment: Alignment.center,
+              child: const Text('Nuevo cálculo', style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13, fontWeight: FontWeight.w500)),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+// ─── Stat chip ────────────────────────────────────────────────────────────────
+class _Chip extends StatelessWidget {
+  final String label, value;
+  final Color color, glow;
+  const _Chip({required this.label, required this.value,
+      required this.color, required this.glow});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$label: $value',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: glow,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withOpacity(0.25)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(value, style: TextStyle(
+            color: color, fontSize: 13, fontWeight: FontWeight.w700)),
+          Text(label, style: const TextStyle(
+            color: AppColors.textSecondary, fontSize: 10)),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─── Decay bar ────────────────────────────────────────────────────────────────
+class _DecayBar extends StatefulWidget {
+  final double fraction;
+  const _DecayBar({required this.fraction});
+  @override
+  State<_DecayBar> createState() => _DecayBarState();
+}
+
+class _DecayBarState extends State<_DecayBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ac;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ac   = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900));
+    _anim = Tween(begin: 0.0, end: widget.fraction)
+        .animate(CurvedAnimation(parent: _ac, curve: Curves.easeOutCubic));
+    _ac.forward();
+  }
+
+  @override
+  void dispose() { _ac.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = (widget.fraction * 100).toStringAsFixed(1);
+    return Semantics(
+      label: 'Actividad restante: $pct%',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('ACTIVIDAD RESTANTE', style: TextStyle(
+          color: AppColors.textDisabled, fontSize: 9,
+          letterSpacing: 1.2, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        AnimatedBuilder(
+          animation: _anim,
+          builder: (_, __) => ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: _anim.value,
+              minHeight: 10,
+              backgroundColor: AppColors.cardHover,
+              valueColor: AlwaysStoppedAnimation(
+                  Color.lerp(AppColors.error, AppColors.success, _anim.value)!),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+// ─── Calculate footer ─────────────────────────────────────────────────────────
+class _CalcFooter extends StatefulWidget {
+  final bool canCalc, busy;
+  final VoidCallback onTap;
+  const _CalcFooter({required this.canCalc, required this.busy, required this.onTap});
+  @override
+  State<_CalcFooter> createState() => _CalcFooterState();
+}
+
+class _CalcFooterState extends State<_CalcFooter>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _press;
+  @override
+  void initState() {
+    super.initState();
+    _press = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 80),
+      reverseDuration: const Duration(milliseconds: 200),
+    );
+  }
+  @override
+  void dispose() { _press.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.canCalc && !widget.busy;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      decoration: const BoxDecoration(
+        color: AppColors.bg,
+        border: Border(top: BorderSide(color: Color(0xFF141428), width: 0.5)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Semantics(
+          label: 'Calcular decaimiento',
+          button: true,
+          enabled: enabled,
+          child: GestureDetector(
+            onTapDown: enabled ? (_) => _press.forward() : null,
+            onTapUp: enabled ? (_) { _press.reverse(); widget.onTap(); } : null,
+            onTapCancel: () => _press.reverse(),
+            child: AnimatedBuilder(
+              animation: _press,
+              builder: (_, child) => Transform.scale(
+                  scale: 1.0 - 0.03 * _press.value, child: child),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: enabled ? AppColors.primary : AppColors.card,
+                  boxShadow: enabled ? [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.40),
+                      blurRadius: 20, offset: const Offset(0, 6)),
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.18),
+                      blurRadius: 40, offset: const Offset(0, 12)),
+                  ] : null,
+                ),
+                alignment: Alignment.center,
+                child: widget.busy
+                    ? const SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : Row(mainAxisSize: MainAxisSize.min, children: [
+                        ExcludeSemantics(child: Icon(Icons.science_rounded,
+                            size: 18,
+                            color: enabled ? Colors.white : AppColors.textDisabled)),
+                        const SizedBox(width: 8),
+                        Text('Calcular decaimiento', style: TextStyle(
+                          color: enabled ? Colors.white : AppColors.textDisabled,
+                          fontSize: 15, fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2)),
+                      ]),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Unit sheet ───────────────────────────────────────────────────────────────
+class _UnitSheet extends StatelessWidget {
+  final RadioUnit selected;
+  final ValueChanged<RadioUnit> onPick;
+  const _UnitSheet({required this.selected, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      child: Column(mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Center(child: ExcludeSemantics(child: Container(
+          width: 36, height: 4,
+          decoration: BoxDecoration(
+            color: AppColors.border,
+            borderRadius: BorderRadius.circular(2))))),
+        const SizedBox(height: 16),
+        const Text('Unidad de actividad', style: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 16, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        ...kUnits.map((u) {
+          final sel = u.id == selected.id;
+          return Semantics(
+            label: '${u.label} — ${u.fullName}',
+            selected: sel,
+            button: true,
+            child: ListTile(
+              dense: true,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              tileColor: sel ? AppColors.primaryGlow : Colors.transparent,
+              title: Text('${u.label} — ${u.fullName}', style: TextStyle(
+                color: sel ? AppColors.primaryLight : AppColors.textPrimary)),
+              trailing: sel
+                  ? ExcludeSemantics(child: const Icon(
+                      Icons.check_circle_rounded,
+                      color: AppColors.primary, size: 18))
+                  : null,
+              onTap: () => onPick(u),
+            ),
+          );
+        }),
+      ]),
+    );
+  }
+}
+
+// ─── Isotope sheet ────────────────────────────────────────────────────────────
+class _IsotopeSheet extends StatelessWidget {
+  final Isotope selected;
+  final ScrollController scroll;
+  final ValueChanged<Isotope> onPick;
+  const _IsotopeSheet({required this.selected, required this.scroll, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    final grouped = <String, List<Isotope>>{};
+    for (final iso in kIsotopes) {
+      grouped.putIfAbsent(iso.category, () => []).add(iso);
+    }
+    return ListView(
+      controller: scroll,
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      children: [
+        Center(child: ExcludeSemantics(child: Container(
+          width: 36, height: 4,
+          decoration: BoxDecoration(
+            color: AppColors.border,
+            borderRadius: BorderRadius.circular(2))))),
+        const SizedBox(height: 16),
+        const Text('Seleccionar isótopo', style: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 16, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 16),
+        ...grouped.entries.expand((entry) => [
+          ExcludeSemantics(child: Padding(
+            padding: const EdgeInsets.only(bottom: 8, top: 4),
+            child: Text(entry.key.toUpperCase(), style: const TextStyle(
+              color: AppColors.textDisabled, fontSize: 10,
+              letterSpacing: 1.2, fontWeight: FontWeight.w600)),
+          )),
+          ...entry.value.map((iso) {
+            final sel = iso.id == selected.id;
+            return Semantics(
+              label: '${iso.name}. Vida media: ${iso.halfLifeDisplay}',
+              selected: sel,
+              button: true,
+              child: ListTile(
+                dense: true,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                tileColor: sel ? AppColors.primaryGlow : Colors.transparent,
+                leading: ExcludeSemantics(child: _IsoPill(isotope: iso)),
+                title: Text(iso.name, style: TextStyle(
+                  color: sel ? AppColors.primaryLight : AppColors.textPrimary,
+                  fontWeight: sel ? FontWeight.w700 : FontWeight.w500)),
+                subtitle: Text(iso.halfLifeDisplay, style: const TextStyle(
+                  color: AppColors.textSecondary, fontSize: 11)),
+                trailing: sel
+                    ? ExcludeSemantics(child: const Icon(
+                        Icons.check_circle_rounded,
+                        color: AppColors.primary, size: 18))
+                    : null,
+                onTap: () => onPick(iso),
+              ),
+            );
+          }),
+          const SizedBox(height: 8),
+        ]),
+      ],
+    );
+  }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+void _snack(BuildContext context, String text) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    content: Row(children: [
+      ExcludeSemantics(child: const Icon(
+          Icons.check_circle_rounded, color: AppColors.success, size: 18)),
+      const SizedBox(width: 8),
+      Text('$text copiado', style: const TextStyle(color: AppColors.textPrimary)),
+    ]),
+    backgroundColor: AppColors.card,
+    behavior: SnackBarBehavior.floating,
+    margin: const EdgeInsets.all(16),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(10),
+      side: const BorderSide(color: AppColors.border)),
+    duration: const Duration(seconds: 2),
+  ));
+}
+
+class _QOpt {
+  final String label;
+  final double hours;
+  final bool isHL;
+  _QOpt(this.label, this.hours, {this.isHL = false});
+}
