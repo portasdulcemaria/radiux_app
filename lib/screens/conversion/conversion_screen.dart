@@ -8,6 +8,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../models/unit.dart';
 import '../../models/decay_service.dart';
 import '../../theme/app_theme.dart';
+import 'package:provider/provider.dart';
+import '../../l10n/app_strings.dart';
 
 // ─── Local palette ────────────────────────────────────────────────────────────
 // _k* constants replaced with AppColors for dark theme consistency
@@ -74,7 +76,7 @@ class _ConversionScreenState extends State<ConversionScreen>
     final value = double.tryParse(text);
     if (value == null) return;
     if (value <= 0) {
-      setState(() => _errorText = 'Ingresa un valor mayor a cero');
+      setState(() => _errorText = AppStrings.of(context).enterPositiveValue);
       return;
     }
     final result = DecayService.convert(value, _fromUnit, _toUnit);
@@ -118,6 +120,7 @@ class _ConversionScreenState extends State<ConversionScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final s = AppStrings.of(context);
     return Stack(
       children: [
         GestureDetector(
@@ -134,7 +137,7 @@ class _ConversionScreenState extends State<ConversionScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Convertir',
+              s.convert,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
                 color: AppColors.textSecondary,
                 fontWeight: FontWeight.w500,
@@ -221,13 +224,13 @@ class _ConversionScreenState extends State<ConversionScreen>
                       ),
                     ],
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.add_rounded, size: 18, color: Colors.white),
                       SizedBox(width: 8),
                       Text(
-                        'Nueva conversión',
+                        s.newConversion,
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
@@ -250,7 +253,7 @@ class _ConversionScreenState extends State<ConversionScreen>
           controller: _inputController,
           onDone: () { _focusNode.unfocus(); setState(() {}); },
           onChanged: () => setState(() {}),
-          doneLabel: 'Convertir',
+          doneLabel: s.convert,
         ),
       ),
   ],
@@ -325,6 +328,7 @@ class _InlineResultState extends State<_InlineResult> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStrings.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -435,7 +439,7 @@ class _InlineResultState extends State<_InlineResult> {
                   ),
                   const SizedBox(width: 7),
                   Text(
-                    _copied ? 'Copiado' : 'Copiar resultado',
+                    _copied ? s.copied : s.copyResult,
                     style: TextStyle(
                       color: _copied ? AppColors.success : AppColors.primary,
                       fontSize: 14,
@@ -716,10 +720,11 @@ class _UnitRowState extends State<_UnitRow>
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStrings.of(context);
     return Row(
       children: [
         _chip(
-          dirLabel:    'Desde',
+          dirLabel:    s.from,
           unit:        widget.fromUnit,
           accentColor: AppColors.primary,
           onTap:       widget.onFromTap,
@@ -760,7 +765,7 @@ class _UnitRowState extends State<_UnitRow>
         ),
 
         _chip(
-          dirLabel:    'Hacia',
+          dirLabel:    s.toward,
           unit:        widget.toUnit,
           accentColor: AppColors.accent,
           onTap:       widget.onToTap,
@@ -827,7 +832,7 @@ class _UnitPickerSheet extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        Text('Seleccioná unidad',
+        Text(AppStrings.of(context).selectUnit,
             style: Theme.of(context)
                 .textTheme
                 .titleMedium
@@ -1024,7 +1029,7 @@ class _LastResultChip extends StatelessWidget {
           const Icon(Icons.history_rounded, size: 14, color: AppColors.textSecondary),
           const SizedBox(width: 8),
           Text(
-            'Último: ',
+            AppStrings.of(context).lastLabel,
             style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
           ),
           Expanded(
@@ -1134,7 +1139,7 @@ class _AllUnitsPanel extends StatelessWidget {
               const Icon(Icons.grid_view_rounded, size: 12, color: AppColors.textSecondary),
               const SizedBox(width: 5),
               Text(
-                'Referencia rápida',
+                AppStrings.of(context).quickReference,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w500,

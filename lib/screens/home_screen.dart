@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../widgets/nuclear_background.dart';
 import '../widgets/radiux_app_bar.dart';
+import 'package:provider/provider.dart';
+import '../services/language_provider.dart';
+import '../l10n/app_strings.dart';
 import 'conversion/conversion_screen.dart';
 import 'decaimiento/decaimiento_screen.dart';
 import 'history/history_screen.dart';
@@ -16,6 +19,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _currentIndex = 0;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
@@ -36,10 +40,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: AppColors.bg,
+      drawer: _SettingsDrawer(),
       appBar: RadiuxAppBar(
         title: 'Radiux',
         showMenuButton: false,
+        leading: IconButton(
+          icon: const Icon(Icons.menu_rounded, size: 22, color: AppColors.textSecondary),
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+          tooltip: 'Menú',
+        ),
         actions: [_InfoButton(context: context)],
       ),
       body: Stack(
@@ -79,6 +90,7 @@ class _RadiuxBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStrings.of(context);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -92,19 +104,19 @@ class _RadiuxBottomNav extends StatelessWidget {
             children: [
               _NavItem(
                 icon: Icons.swap_horiz_rounded,
-                label: 'Conversión',
+                label: s.unitConversion,
                 isSelected: currentIndex == 0,
                 onTap: () => onTap(0),
               ),
               _NavItem(
                 icon: Icons.science_outlined,
-                label: 'Decaimiento',
+                label: s.radioactiveDecay,
                 isSelected: currentIndex == 1,
                 onTap: () => onTap(1),
               ),
               _NavItem(
                 icon: Icons.history_rounded,
-                label: 'Actividad',
+                label: s.shiftActivity,
                 isSelected: currentIndex == 2,
                 onTap: () => onTap(2),
               ),
@@ -167,6 +179,7 @@ class _NavItem extends StatelessWidget {
     );
   }
 }
+
 
 // ── Info button ───────────────────────────────────────────────────────────────
 class _InfoButton extends StatelessWidget {
@@ -327,3 +340,91 @@ Las preferencias del usuario se almacenan exclusivamente en el dispositivo y no 
 4. Terceros
 Radiux no comparte datos con terceros ni integra servicios de análisis externos.
 ''';
+
+// ── Settings Drawer ───────────────────────────────────────────────────────────
+class _SettingsDrawer extends StatelessWidget {
+  const _SettingsDrawer();
+
+  @override
+  Widget build(BuildContext context) {
+    final langProvider = context.watch<LanguageProvider>();
+    return Drawer(
+      backgroundColor: AppColors.surface,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Ajustes',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary, letterSpacing: -0.5)),
+                  const SizedBox(height: 4),
+                  Text('Radiux v2.0',
+                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                  const SizedBox(height: 16),
+                  const Divider(color: AppColors.border, height: 1),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                children: [
+                  _DrawerSection('Idioma'),
+                  ...AppStrings.supportedLanguages.map((lang) {
+                    final isSelected = langProvider.locale.languageCode == lang.code;
+                    return ListTile(
+                      dense: true,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      tileColor: isSelected ? AppColors.primaryGlow : Colors.transparent,
+                      leading: Text(lang.flag, style: const TextStyle(fontSize: 22)),
+                      title: Text(lang.nativeName,
+                        style: TextStyle(
+                          color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                          fontSize: 14,
+                        )),
+                      subtitle: Text(lang.name,
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                      trailing: isSelected
+                        ? const Icon(Icons.check_rounded, color: AppColors.primary, size: 18)
+                        : null,
+                      onTap: () {
+                        context.read<LanguageProvider>().setLocale(lang.locale);
+                        Navigator.pop(context);
+                      },
+                    );
+                  }),
+                ],
+              ),
+            ),
+            const Divider(color: AppColors.border, height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              child: Text('Uso clínico supervisado',
+                style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DrawerSection extends StatelessWidget {
+  final String label;
+  const _DrawerSection(this.label);
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 12, 8, 6),
+      child: Text(label.toUpperCase(),
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+          letterSpacing: 1.2, color: AppColors.textSecondary)),
+    );
+  }
+}

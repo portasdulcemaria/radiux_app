@@ -8,6 +8,8 @@ import '../../models/decay_record.dart';
 import '../../models/isotope.dart';
 import '../../models/decay_service.dart';
 import '../../theme/app_theme.dart';
+import 'package:provider/provider.dart';
+import '../../l10n/app_strings.dart';
 
 class HistoryScreen extends StatefulWidget {
   final VoidCallback? onGoToDecaimiento;
@@ -104,6 +106,7 @@ class _HistoryScreenState extends State<HistoryScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final s = AppStrings.of(context);
     final stats = _todayByIsotope;
     final filtered = _filtered;
     final isotopes = _availableIsotopes;
@@ -124,7 +127,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _SectionHeader(
-                    title: 'TURNO DE HOY',
+                    title: s.todayShift,
                     subtitle: DateFormat("EEEE, d 'de' MMMM", 'es_AR')
                         .format(DateTime.now()),
                   ),
@@ -155,7 +158,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                 children: [
                   Row(
                     children: [
-                      const Expanded(child: _SectionHeader(title: 'REGISTROS')),
+                      Expanded(child: _SectionHeader(title: s.records)),
                       if (isotopes.length > 1)
                         _IsotopeFilterButton(
                           isotopes: isotopes,
@@ -171,7 +174,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                     child: Row(
                       children: [
                         _Chip(
-                          label: 'Hoy',
+                          label: s.today,
                           selected: _filterTime == 'hoy',
                           onTap: () => setState(() {
                             _filterTime = 'hoy';
@@ -180,7 +183,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                         ),
                         SizedBox(width: AppSpacing.sm),
                         _Chip(
-                          label: 'Ayer',
+                          label: s.yesterday,
                           selected: _filterTime == 'ayer',
                           onTap: () => setState(() {
                             _filterTime = 'ayer';
@@ -189,7 +192,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                         ),
                         SizedBox(width: AppSpacing.sm),
                         _Chip(
-                          label: '7 días',
+                          label: s.sevenDays,
                           selected: _filterTime == 'semana',
                           onTap: () => setState(() {
                             _filterTime = 'semana';
@@ -231,7 +234,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                                   Padding(
                                     padding: EdgeInsets.fromLTRB(AppSpacing.base, AppSpacing.xs, AppSpacing.base, 6),
                                     child: Text(
-                                      _dayLabel(record.timestamp),
+                                      _dayLabel(record.timestamp, context),
                                       style: Theme.of(context)
                                           .textTheme
                                           .labelSmall
@@ -266,12 +269,13 @@ class _HistoryScreenState extends State<HistoryScreen>
   bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
-  String _dayLabel(DateTime dt) {
+  String _dayLabel(DateTime dt, BuildContext context) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final d = DateTime(dt.year, dt.month, dt.day);
-    if (d == today) return 'HOY';
-    if (d == today.subtract(const Duration(days: 1))) return 'AYER';
+    final s = AppStrings.listen(context);
+    if (d == today) return s.todayUpper;
+    if (d == today.subtract(const Duration(days: 1))) return s.yesterdayUpper;
     return DateFormat('EEEE d MMM', 'es_AR').format(dt).toUpperCase();
   }
 }
@@ -470,7 +474,7 @@ class _IsotopeCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Actividad promedio restante',
+                    AppStrings.of(context).avgRemainingAct,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: AppColors.textSecondary,
                         ),
@@ -557,11 +561,11 @@ class _RecordRowState extends State<_RecordRow> {
     bool isCriticalAction = false;
     if (pctVal < 20) {
       barColor = AppColors.critical;
-      actionLabel = 'Verificar viabilidad';
+      actionLabel = AppStrings.of(context).stateCritical;
       isCriticalAction = true;
     } else if (pctVal < 60) {
       barColor = AppColors.primary;
-      actionLabel = 'Actividad baja';
+      actionLabel = AppStrings.of(context).lowActivity;
     } else {
       barColor = AppColors.accent;
       actionLabel = null;
@@ -843,7 +847,7 @@ class _IsotopeFilterButton extends StatelessWidget {
             Text(
               hasFilter
                   ? iso!.symbol.split('\n').join('')
-                  : 'Isótopo',
+                  : AppStrings.of(context).isotope,
               style: TextStyle(
                 color: hasFilter
                     ? (iso?.color ?? AppColors.primary)
@@ -918,7 +922,7 @@ class _IsotopePickerSheet extends StatelessWidget {
           ),
           SizedBox(height: AppSpacing.base),
           Text(
-            'Filtrar por isótopo',
+            AppStrings.of(context).filterByIsotope,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -934,8 +938,8 @@ class _IsotopePickerSheet extends StatelessWidget {
           SizedBox(height: AppSpacing.base),
           // "Todos" option
           _IsoRow(
-            label: 'Todos los isótopos',
-            subtitle: 'Sin filtro activo',
+            label: AppStrings.of(context).allIsotopes,
+            subtitle: AppStrings.of(context).noFilter,
             color: AppColors.textSecondary,
             isSelected: selected == null,
             onTap: () => onSelect(null),
@@ -1123,7 +1127,7 @@ class _EmptyTurno extends StatelessWidget {
           ),
           SizedBox(height: AppSpacing.base),
           Text(
-            'Aún no comenzó tu turno',
+            AppStrings.of(context).shiftNotStarted,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -1132,7 +1136,7 @@ class _EmptyTurno extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Calculá un decaimiento para empezar a registrar la actividad del turno.',
+            AppStrings.of(context).shiftNotStartedSub,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.textSecondary,
                   height: 1.5,
@@ -1174,7 +1178,7 @@ class _EmptyRecords extends StatelessWidget {
           ),
           SizedBox(height: AppSpacing.base),
           Text(
-            isHoy ? 'Aún no comenzó tu turno' : filter == 'ayer' ? 'Sin actividad registrada ayer' : 'Sin actividad en los últimos 7 días',
+            isHoy ? AppStrings.of(context).shiftNotStarted : filter == 'ayer' ? 'Sin actividad registrada ayer' : 'Sin actividad en los últimos 7 días',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.textPrimary.withOpacity(0.8),
                   fontWeight: FontWeight.w600,
@@ -1184,7 +1188,7 @@ class _EmptyRecords extends StatelessWidget {
           SizedBox(height: AppSpacing.xs),
           Text(
             isHoy
-                ? 'Calculá un decaimiento para empezar a registrar la actividad del turno.'
+                ? AppStrings.of(context).shiftNotStartedSub
                 : 'Los registros se generan al calcular un decaimiento.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.textSecondary,
@@ -1213,13 +1217,13 @@ class _EmptyRecords extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.science_outlined, size: 16, color: Colors.white),
-                    SizedBox(width: 8),
+                    const Icon(Icons.science_outlined, size: 16, color: Colors.white),
+                    const SizedBox(width: 8),
                     Text(
-                      'Ir a Decaimiento',
+                      AppStrings.of(context).goToDecay,
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 14,

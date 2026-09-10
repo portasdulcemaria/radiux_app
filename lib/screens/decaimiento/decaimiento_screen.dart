@@ -12,6 +12,8 @@ import '../../models/isotope.dart';
 import '../../models/unit.dart';
 import '../../models/decay_service.dart';
 import '../../theme/app_theme.dart';
+import 'package:provider/provider.dart';
+import '../../l10n/app_strings.dart';
 import '../../theme/app_motion.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/isotope_pill.dart';
@@ -165,12 +167,12 @@ class _DecaimientoScreenState extends State<DecaimientoScreen>
   Future<void> _calculate() async {
     final a0 = _initialActivity;
     if (a0 == null || a0 <= 0) {
-      setState(() => _errorText = 'Ingresá un valor de actividad positivo');
+      setState(() => _errorText = AppStrings.listen(context).enterPositiveValue);
       HapticFeedback.mediumImpact();
       return;
     }
     if (_addedHours <= 0) {
-      setState(() => _errorText = 'Seleccioná un tiempo transcurrido');
+      setState(() => _errorText = AppStrings.listen(context).elapsedTime + ' requerido');
       HapticFeedback.mediumImpact();
       return;
     }
@@ -309,7 +311,7 @@ class _DecaimientoScreenState extends State<DecaimientoScreen>
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
                         child: Text(
-                          'Nuevo cálculo',
+                          AppStrings.of(context).newCalculation,
                           style: Theme.of(context).textTheme.labelMedium?.copyWith(
                               color: AppColors.primary.withOpacity(0.6),
                               decoration: TextDecoration.underline,
@@ -322,7 +324,7 @@ class _DecaimientoScreenState extends State<DecaimientoScreen>
                 ],
 
                 // ── Sección 1: Actividad inicial (siempre visible) ────────
-                _StepLabel(number: 1, label: 'Actividad inicial', done: _step0Done),
+                _StepLabel(number: 1, label: AppStrings.of(context).initialActivity, done: _step0Done),
                 const SizedBox(height: 10),
                 _ActivityInputRow(
                   controller: _controller,
@@ -345,7 +347,7 @@ class _DecaimientoScreenState extends State<DecaimientoScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(height: AppSpacing.lg),
-                            _StepLabel(number: 2, label: 'Isótopo', done: _step1Done),
+                            _StepLabel(number: 2, label: AppStrings.of(context).isotope, done: _step1Done),
                             const SizedBox(height: AppSpacing.sm),
                             _PressableScale(
                               onTap: _showIsotopePicker,
@@ -437,7 +439,7 @@ class _DecaimientoScreenState extends State<DecaimientoScreen>
                                     ],
                                   ),
                                   alignment: Alignment.center,
-                                  child: Text('Confirmar isótopo',
+                                  child: Text(AppStrings.of(context).confirmIsotope,
                                       style: Theme.of(context)
                                           .textTheme
                                           .labelLarge
@@ -464,7 +466,7 @@ class _DecaimientoScreenState extends State<DecaimientoScreen>
                             Row(
                               children: [
                                 Expanded(
-                                  child: Text('Fecha inicial',
+                                  child: Text(AppStrings.of(context).initialDate,
                                       style: Theme.of(context)
                                           .textTheme
                                           .labelMedium
@@ -490,7 +492,7 @@ class _DecaimientoScreenState extends State<DecaimientoScreen>
                                             size: 14,
                                             color: AppColors.primary),
                                         const SizedBox(width: 6),
-                                        Text('Modificar',
+                                        Text(AppStrings.of(context).modify,
                                             style: Theme.of(context)
                                                 .textTheme
                                                 .labelSmall
@@ -507,7 +509,7 @@ class _DecaimientoScreenState extends State<DecaimientoScreen>
                             const SizedBox(height: AppSpacing.sm),
                             _DateTimeCard(dateTime: _referenceDate),
                             const SizedBox(height: AppSpacing.lg),
-                            _StepLabel(number: 3, label: 'Tiempo transcurrido', done: _step2Done),
+                            _StepLabel(number: 3, label: AppStrings.of(context).elapsedTime, done: _step2Done),
                             const SizedBox(height: 10),
                             _QuickTimeRow(
                               options: _quickOptions,
@@ -612,7 +614,7 @@ class _DecaimientoScreenState extends State<DecaimientoScreen>
                                 color: AppColors.border,
                                 borderRadius: BorderRadius.circular(2)))),
                     const SizedBox(height: AppSpacing.base),
-                    Text('Unidad de actividad',
+                    Text(AppStrings.of(context).activityUnit,
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: AppSpacing.sm),
                   ],
@@ -1221,7 +1223,7 @@ class _TargetDateCard extends StatelessWidget {
           Row(
             children: [
               Text(
-                'Calculada automáticamente · ',
+                AppStrings.of(context).autoCalculated,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: AppColors.primary.withOpacity(0.7)),
               ),
@@ -1315,7 +1317,7 @@ class _DecayResultCardState extends State<_DecayResultCard>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Actividad residual',
+                      AppStrings.of(context).residualActivity,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                             color: AppColors.primary.withOpacity(0.8),
                             letterSpacing: 0.4,
@@ -1328,7 +1330,7 @@ class _DecayResultCardState extends State<_DecayResultCard>
               ),
               // Copy button with checkmark feedback
               Semantics(
-                label: 'Copiar resultado',
+                label: AppStrings.of(context).copyResult,
                 button: true,
                 child: GestureDetector(
                   onTap: () => _copy(context),
@@ -1395,18 +1397,18 @@ class _DecayResultCardState extends State<_DecayResultCard>
           // ── Stat chips (staggered entrance) ───────────────────────
           Row(
             children: [
-              _StatChip(label: 'Restante', value: '$pct%', color: AppColors.accent)
+              _StatChip(label: AppStrings.of(context).remaining, value: '$pct%', color: AppColors.accent)
                   .animate().fadeIn(delay: 100.ms, duration: 350.ms)
                   .slideY(begin: 0.3, end: 0, curve: Curves.easeOutBack)
                   .scale(begin: const Offset(0.82, 0.82), end: const Offset(1, 1), delay: 100.ms, duration: 350.ms, curve: Curves.easeOutBack),
               const SizedBox(width: AppSpacing.sm),
-              _StatChip(label: 'Vidas medias', value: halfLives, color: AppColors.accent)
+              _StatChip(label: AppStrings.of(context).halfLives, value: halfLives, color: AppColors.accent)
                   .animate().fadeIn(delay: 200.ms, duration: 350.ms)
                   .slideY(begin: 0.3, end: 0, curve: Curves.easeOutBack)
                   .scale(begin: const Offset(0.82, 0.82), end: const Offset(1, 1), delay: 200.ms, duration: 350.ms, curve: Curves.easeOutBack),
               const SizedBox(width: AppSpacing.sm),
               _StatChip(
-                      label: 'Reducción',
+                      label: AppStrings.of(context).reduction,
                       value: '${(100 - double.parse(pct)).toStringAsFixed(2)}%',
                       color: AppColors.primary)
                   .animate().fadeIn(delay: 300.ms, duration: 350.ms)
@@ -1493,7 +1495,7 @@ class _DecayBarState extends State<_DecayBar>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'ACTIVIDAD RESTANTE',
+          AppStrings.of(context).remainingActivity,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: AppColors.textSecondary,
                 letterSpacing: 1,
@@ -1538,7 +1540,7 @@ class _CalculateFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     if (hasResult) return const SizedBox.shrink();
 
-    const label = 'Calcular actividad residual';
+    final label = AppStrings.of(context).calculateResidual;
     const icon = Icon(Icons.calculate_outlined, color: Colors.white, size: 18);
 
     return AnimatedSlide(
@@ -1672,7 +1674,7 @@ class _IsotopePickerSheet extends StatelessWidget {
                     color: AppColors.border,
                     borderRadius: BorderRadius.circular(2)))),
         const SizedBox(height: AppSpacing.base),
-        Text('Seleccionar isótopo',
+        Text(AppStrings.of(context).selectIsotope,
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: AppSpacing.base),
         // ── Sección Recientes ─────────────────────────────────────
@@ -1680,7 +1682,7 @@ class _IsotopePickerSheet extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 8, top: 4),
             child: Text(
-              'RECIENTES',
+              AppStrings.of(context).recent,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: AppColors.accent,
                 letterSpacing: 1.2,
@@ -1885,9 +1887,9 @@ class _DateTimePickerSheetState extends State<_DateTimePickerSheet>
                 unselectedLabelColor: AppColors.textSecondary,
                 labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                 dividerColor: Colors.transparent,
-                tabs: const [
-                  Tab(text: 'Fecha'),
-                  Tab(text: 'Hora'),
+                tabs: [
+                  Tab(text: AppStrings.of(context).dateLabel),
+                  Tab(text: AppStrings.of(context).timeLabel),
                 ],
               ),
             ),
@@ -1940,8 +1942,8 @@ class _DateTimePickerSheetState extends State<_DateTimePickerSheet>
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       alignment: Alignment.center,
-                      child: const Text(
-                        'Cancelar',
+                      child: Text(
+                        AppStrings.of(context).cancel,
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontWeight: FontWeight.w500,
@@ -2101,8 +2103,8 @@ class _DateTimePickerSheetState extends State<_DateTimePickerSheet>
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 border: Border.all(color: AppColors.primary.withOpacity(0.4)),
               ),
-              child: const Text(
-                'Ahora',
+              child: Text(
+                AppStrings.of(context).now,
                 style: TextStyle(
                   color: AppColors.primaryLight,
                   fontSize: 12,
@@ -2353,7 +2355,7 @@ class _ResultRevealSheetState extends State<_ResultRevealSheet>
                   children: [
                     IsotopePill(isotope: widget.isotope, size: IsotopePillSize.large),
                     Text(
-                      'Actividad residual',
+                      AppStrings.of(context).residualActivity,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: AppColors.textSecondary,
                         letterSpacing: 0.4,
@@ -2378,7 +2380,7 @@ class _ResultRevealSheetState extends State<_ResultRevealSheet>
                             size: 13, color: AppColors.accent),
                         const SizedBox(width: 5),
                         Text(
-                          'Registrado en turno',
+                          AppStrings.of(context).recordedInShift,
                           style: TextStyle(
                             color: AppColors.accent,
                             fontSize: 12,
@@ -2477,19 +2479,19 @@ class _ResultRevealSheetState extends State<_ResultRevealSheet>
                   childAspectRatio: 1.25,
                   children: [
                     _BentoStat(
-                      label: 'Restante',
+                      label: AppStrings.of(context).remaining,
                       value: '$pct%',
                       icon: Icons.water_drop_outlined,
                       color: semanticColor,
                     ),
                     _BentoStat(
-                      label: 'Vidas medias',
+                      label: AppStrings.of(context).halfLives,
                       value: halfLives,
                       icon: Icons.timelapse_rounded,
                       color: AppColors.accent,
                     ),
                     _BentoStat(
-                      label: 'Reducción',
+                      label: AppStrings.of(context).reduction,
                       value: '$reduction%',
                       icon: Icons.trending_down_rounded,
                       color: AppColors.primary,   // indigo — dato informativo
@@ -2532,7 +2534,7 @@ class _ResultRevealSheetState extends State<_ResultRevealSheet>
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Text(
-                          _copied ? 'Copiado' : 'Copiar resultado',
+                          _copied ? AppStrings.of(context).copied : AppStrings.of(context).copyResult,
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -2569,13 +2571,13 @@ class _ResultRevealSheetState extends State<_ResultRevealSheet>
                         ),
                       ],
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.add_rounded, size: 18, color: Colors.white),
                         SizedBox(width: AppSpacing.sm),
                         Text(
-                          'Nuevo cálculo',
+                          AppStrings.of(context).newCalculation,
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
@@ -3178,7 +3180,7 @@ class _DecayLastResultChip extends StatelessWidget {
         children: [
           const Icon(Icons.history_rounded, size: 14, color: AppColors.textSecondary),
           const SizedBox(width: 8),
-          Text('Último: ', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          Text(AppStrings.of(context).lastLabel, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
           Expanded(
             child: Text(
               '$value ${unit.label}',

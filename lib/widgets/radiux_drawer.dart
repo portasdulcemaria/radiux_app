@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_theme.dart';
 import 'radiation_icon.dart';
+import 'package:provider/provider.dart';
+import '../services/language_provider.dart';
+import '../l10n/app_strings.dart';
 
 class RadiuxDrawer extends StatelessWidget {
   /// Callback para navegar a un tab del HomeScreen.
@@ -119,10 +122,7 @@ class RadiuxDrawer extends StatelessWidget {
                       icon: Icons.settings_outlined,
                       label: 'Configuración',
                       color: AppColors.textSecondary,
-                      onTap: () {
-                        Navigator.pop(context);
-                        _showComingSoon(context, 'Configuración');
-                      },
+                      onTap: () => _showLanguageSettings(context),
                     ).animate().fadeIn(delay: 180.ms, duration: 220.ms).slideX(begin: -0.08, end: 0),
                     SizedBox(height: AppSpacing.base),
                     _SectionLabel('Legal'),
@@ -194,6 +194,77 @@ class RadiuxDrawer extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showLanguageSettings(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setState) {
+            final langProvider = ctx.watch<LanguageProvider>();
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36, height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.border,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Idioma / Language',
+                    style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...AppStrings.supportedLanguages.map((lang) {
+                    final isSelected = langProvider.locale.languageCode == lang.code;
+                    return ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      leading: Text(lang.flag, style: const TextStyle(fontSize: 22)),
+                      title: Text(
+                        lang.nativeName,
+                        style: TextStyle(
+                          color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      ),
+                      subtitle: Text(
+                        lang.name,
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      ),
+                      trailing: isSelected
+                          ? const Icon(Icons.check_rounded, color: AppColors.primary, size: 20)
+                          : null,
+                      onTap: () {
+                        ctx.read<LanguageProvider>().setLocale(lang.locale);
+                        Navigator.pop(ctx);
+                      },
+                    );
+                  }),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

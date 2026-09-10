@@ -7,11 +7,14 @@ class RadiuxAppBar extends StatelessWidget implements PreferredSizeWidget {
   final List<Widget>? actions;
   final bool showMenuButton;
 
+  final Widget? leading;
+
   const RadiuxAppBar({
     super.key,
     required this.title,
     this.actions,
     this.showMenuButton = true,
+    this.leading,
   });
 
   @override
@@ -31,6 +34,7 @@ class RadiuxAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
           child: Row(
             children: [
+              if (leading != null) ...[leading!, const SizedBox(width: 4)],
               // Lockup: símbolo + wordmark juntos a la izquierda
               const _RadiuxLockup(),
               const Spacer(),
