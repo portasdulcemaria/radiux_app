@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../models/unit.dart';
 import '../../models/decay_service.dart';
+import '../../models/conversion_memory.dart';
 import '../../theme/app_theme.dart';
 import 'package:provider/provider.dart';
 import '../../l10n/app_strings.dart';
@@ -190,6 +191,8 @@ class _ConversionScreenState extends State<ConversionScreen>
                 toLabel: _toUnit.label,
                 fromText: _inputController.text,
                 fromLabel: _fromUnit.label,
+                resultValue: _result!,
+                resultUnit: _toUnit,
               ).animate().fadeIn(duration: 300.ms).slideY(
                 begin: 0.15, end: 0,
                 duration: 350.ms, curve: Curves.easeOutBack),
@@ -301,12 +304,16 @@ class _InlineResult extends StatefulWidget {
   final String toLabel;
   final String fromText;
   final String fromLabel;
+  final double resultValue;
+  final RadioUnit resultUnit;
 
   const _InlineResult({
     required this.result,
     required this.toLabel,
     required this.fromText,
     required this.fromLabel,
+    required this.resultValue,
+    required this.resultUnit,
   });
 
   @override
@@ -319,11 +326,25 @@ class _InlineResultState extends State<_InlineResult> {
   void _copy() async {
     HapticFeedback.mediumImpact();
     SoundService.instance.copy();
+
     await Clipboard.setData(
-        ClipboardData(text: '${widget.result} ${widget.toLabel}'));
+      ClipboardData(
+        text: '${widget.result} ${widget.toLabel}',
+      ),
+    );
+
+    ConversionMemory.save(
+      value: widget.resultValue,
+      unit: widget.resultUnit,
+    );
+
     setState(() => _copied = true);
+
     await Future.delayed(const Duration(milliseconds: 1800));
-    if (mounted) setState(() => _copied = false);
+
+    if (mounted) {
+      setState(() => _copied = false);
+    }
   }
 
   @override

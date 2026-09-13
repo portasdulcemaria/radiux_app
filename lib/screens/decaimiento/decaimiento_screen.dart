@@ -17,6 +17,7 @@ import '../../l10n/app_strings.dart';
 import '../../theme/app_motion.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/isotope_pill.dart';
+import '../../models/conversion_memory.dart';
 
 class DecaimientoScreen extends StatefulWidget {
   const DecaimientoScreen({super.key});
@@ -88,11 +89,22 @@ class _DecaimientoScreenState extends State<DecaimientoScreen>
   @override
   void initState() {
     super.initState();
+
     _controller.addListener(_onInputChanged);
-    _focusNode.addListener(() { if (mounted) setState(() {}); });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focusNode.requestFocus();
+    _focusNode.addListener(() {
+      if (mounted) setState(() {});
     });
+
+    if (ConversionMemory.hasValue()) {
+      _controller.text = ConversionMemory.value!.toString();
+      _unit = ConversionMemory.unit!;
+      _activeStep = 1;
+      ConversionMemory.clear();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focusNode.requestFocus();
+      });
+    }
   }
 
   @override
