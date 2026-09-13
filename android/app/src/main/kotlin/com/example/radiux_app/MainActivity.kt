@@ -1,4 +1,4 @@
-package com.example.radiux_app
+package com.rap.radiux
 
 import io.flutter.embedding.android.FlutterActivity
 

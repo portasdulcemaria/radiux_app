@@ -189,7 +189,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
                       if (_showCta)
                         Text(
-                          'v2.0 · Uso clínico supervisado',
+                          'v2.0.4 · Uso clínico supervisado',
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.50),
                             fontSize: 11,

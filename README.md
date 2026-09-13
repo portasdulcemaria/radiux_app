@@ -1,4 +1,4 @@
-# Radiux v2.0 — App de Medicina Nuclear
+# Radiux v2.0.4 — App de Medicina Nuclear
 
 App nativa Flutter para conversión de unidades de actividad radiactiva y cálculo de decaimiento radioactivo.
 

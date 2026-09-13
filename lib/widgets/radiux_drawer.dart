@@ -165,7 +165,7 @@ class RadiuxDrawer extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
               child: Text(
-                'Radiux v2.0 · Uso clínico supervisado',
+                'Radiux v2.0.4 · Uso clínico supervisado',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -183,7 +183,7 @@ class RadiuxDrawer extends StatelessWidget {
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
-        title: const Text('Radiux v2.0'),
+        title: const Text('Radiux v2.0.4'),
         content: const Text(
           'Calculadora de medicina nuclear para conversión de unidades de actividad radiactiva y cálculo de decaimiento por isótopo.\n\nDesarrollada para uso clínico supervisado en servicios de Medicina Nuclear.',
         ),
@@ -346,7 +346,7 @@ class RadiuxDrawer extends StatelessWidget {
 }
 
 const _kTerminos = '''
-Términos y condiciones de uso — Radiux v2.0
+Términos y condiciones de uso — Radiux v2.0.4
 
 1. Uso informativo
 Radiux es una herramienta de apoyo clínico para profesionales de Medicina Nuclear. Los cálculos no reemplazan el criterio médico ni los protocolos institucionales vigentes.
@@ -365,7 +365,7 @@ Para reportar errores o sugerencias, contactar al equipo de desarrollo a través
 ''';
 
 const _kPrivacidad = '''
-Política de privacidad — Radiux v2.0
+Política de privacidad — Radiux v2.0.4
 
 1. Datos recopilados
 Radiux no recopila, almacena ni transmite datos personales de pacientes ni del usuario. Todos los cálculos se procesan localmente en el dispositivo.
