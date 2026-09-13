@@ -20,6 +20,21 @@ dependencies:
   shared_preferences: ^2.2.3
   audioplayers: ^6.0.0
   wakelock_plus: ^1.3.1
+  flutter_native_splash: ^2.4.8
+  flutter_launcher_icons: ^0.14.3
+
+flutter_native_splash:
+  color: "#07070F"
+  android_12:
+    icon_background_color: "#07070F"
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#07070F"
+  adaptive_icon_foreground: "assets/icon/app_icon.png"
 
 dev_dependencies:
   flutter_test:
